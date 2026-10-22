@@ -1,0 +1,53 @@
+[project]
+name = "atlas-workspace"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+# Globbed so a Docker build context holding only one service still forms a valid workspace.
+members = ["libs/py-common", "services/*"]
+exclude = ["services/gateway", "services/brokerage-sync"]
+
+[tool.uv.sources]
+atlas-common = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx2>=0.1",
+    "ruff>=0.7",
+    "mypy>=1.13",
+    "jsonschema>=4.23",
+    "types-jsonschema>=4.23",
+    "testcontainers[postgres,redis]>=4.8",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC", "S", "RUF"]
+ignore = ["S101"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["atlas_common", "atlas_auth", "atlas_portfolio", "atlas_analytics", "atlas_risk", "atlas_ai", "atlas_notifications"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["testcontainers.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = ["integration: needs Docker (testcontainers)"]

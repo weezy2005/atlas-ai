@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlas-ai.dev/schemas/user.created.v1.json",
+  "title": "user.created.v1 payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "email",
+    "created_at"
+  ],
+  "properties": {
+    "email": {
+      "type": "string",
+      "format": "email"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

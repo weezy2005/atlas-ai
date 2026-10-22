@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlas-ai.dev/schemas/portfolio.updated.v1.json",
+  "title": "portfolio.updated.v1 payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "snapshot_id",
+    "as_of",
+    "total_value",
+    "position_count"
+  ],
+  "properties": {
+    "snapshot_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "as_of": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "total_value": {
+      "type": "string",
+      "pattern": "^-?\\d+(\\.\\d+)?$",
+      "description": "Decimal encoded as string to avoid float rounding"
+    },
+    "position_count": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

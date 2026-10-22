@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlas-ai.dev/schemas/trade.received.v1.json",
+  "title": "trade.received.v1 payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "account_id",
+    "broker_trade_id",
+    "symbol",
+    "side",
+    "quantity",
+    "price",
+    "executed_at"
+  ],
+  "properties": {
+    "account_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "broker_trade_id": {
+      "type": "string"
+    },
+    "symbol": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32
+    },
+    "side": {
+      "enum": [
+        "buy",
+        "sell"
+      ]
+    },
+    "quantity": {
+      "type": "string",
+      "pattern": "^-?\\d+(\\.\\d+)?$",
+      "description": "Decimal encoded as string to avoid float rounding"
+    },
+    "price": {
+      "type": "string",
+      "pattern": "^-?\\d+(\\.\\d+)?$",
+      "description": "Decimal encoded as string to avoid float rounding"
+    },
+    "executed_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

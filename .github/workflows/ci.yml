@@ -1,0 +1,64 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-packages --frozen --python 3.12
+      - name: ruff
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: mypy
+        run: uv run mypy libs/py-common services/auth services/portfolio services/analytics services/risk services/ai services/notifications
+      - name: pytest (unit + testcontainers integration)
+        run: uv run pytest -v
+
+  go:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [libs/go-common, services/gateway, services/brokerage-sync]
+    defaults:
+      run:
+        working-directory: ${{ matrix.module }}
+    env:
+      GOWORK: "off"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ matrix.module }}/go.mod
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+      - run: go vet ./...
+      - run: go test -race ./...
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: ${{ matrix.module }}
+
+  compose:
+    needs: [python, go]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cp .env.example .env
+      - name: build and start stack
+        run: docker compose --env-file .env -f infra/docker-compose.yml up -d --build --wait --wait-timeout 300
+      - name: every service ready (postgres, redis, kafka reachable)
+        run: sh scripts/smoke.sh
+      - name: logs on failure
+        if: failure()
+        run: docker compose --env-file .env -f infra/docker-compose.yml logs --tail=200

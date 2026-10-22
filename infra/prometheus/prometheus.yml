@@ -1,0 +1,17 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: gateway
+    static_configs:
+      - targets: ["gateway:8080"]
+  - job_name: services
+    static_configs:
+      - targets:
+          - brokerage-sync:8000
+          - auth:8000
+          - portfolio:8000
+          - analytics:8000
+          - risk:8000
+          - ai:8000
+          - notifications:8000

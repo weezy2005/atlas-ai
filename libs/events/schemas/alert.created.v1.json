@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlas-ai.dev/schemas/alert.created.v1.json",
+  "title": "alert.created.v1 payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "alert_id",
+    "rule_id",
+    "severity",
+    "message",
+    "created_at"
+  ],
+  "properties": {
+    "alert_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "rule_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "severity": {
+      "enum": [
+        "info",
+        "warning",
+        "critical"
+      ]
+    },
+    "message": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlas-ai.dev/schemas/analytics.updated.v1.json",
+  "title": "analytics.updated.v1 payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "as_of",
+    "metrics"
+  ],
+  "properties": {
+    "as_of": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "metrics": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

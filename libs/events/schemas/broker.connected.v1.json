@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlas-ai.dev/schemas/broker.connected.v1.json",
+  "title": "broker.connected.v1 payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "account_id",
+    "broker",
+    "scopes",
+    "connected_at"
+  ],
+  "properties": {
+    "account_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "broker": {
+      "type": "string",
+      "enum": [
+        "mock",
+        "alpaca",
+        "ibkr",
+        "tradier"
+      ]
+    },
+    "scopes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "connected_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
