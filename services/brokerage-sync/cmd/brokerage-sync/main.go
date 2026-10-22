@@ -79,7 +79,7 @@ func run(log *slog.Logger, port string) error {
 		return fmt.Errorf("REDIS_URL: %w", err)
 	}
 	rdb := redis.NewClient(opts)
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	checks := []health.Check{
 		{Name: "postgres", Fn: pool.Ping},

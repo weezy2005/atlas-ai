@@ -41,7 +41,7 @@ lint-py:
 	uv run mypy libs/py-common $(addprefix services/,$(PY_SERVICES))
 
 lint-go:
-	@for m in $(GO_MODULES); do (cd $$m && golangci-lint run ./...) || exit 1; done
+	@for m in $(GO_MODULES); do (cd $$m && go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.2 run ./...) || exit 1; done
 
 fmt:
 	uv run ruff format .

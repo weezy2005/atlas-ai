@@ -61,7 +61,7 @@ func run(log *slog.Logger, port string) error {
 		return fmt.Errorf("REDIS_URL: %w", err)
 	}
 	rdb := redis.NewClient(opts)
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	checks := []health.Check{
 		{Name: "redis", Fn: func(ctx context.Context) error { return rdb.Ping(ctx).Err() }},
@@ -71,7 +71,9 @@ func run(log *slog.Logger, port string) error {
 
 func newRouter(m *metrics.Metrics, checks []health.Check) http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID, middleware.RealIP, middleware.Recoverer, m.Middleware)
+	// No middleware.RealIP: it trusts client-supplied X-Forwarded-For (IP spoofing).
+	// Client IP for rate limiting will come only from the trusted ingress (Phase 2).
+	r.Use(middleware.RequestID, middleware.Recoverer, m.Middleware)
 	r.Get("/health", health.LivenessHandler(service))
 	r.Get("/ready", health.ReadinessHandler(checks, 2*time.Second))
 	r.Handle("/metrics", m.Handler())

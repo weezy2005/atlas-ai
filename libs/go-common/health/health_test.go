@@ -61,7 +61,7 @@ func TestTCPCheck(t *testing.T) {
 	if err := TCPCheck("kafka", addr+",other:9092").Fn(context.Background()); err != nil {
 		t.Fatalf("open port: %v", err)
 	}
-	ln.Close()
+	_ = ln.Close()
 	if err := TCPCheck("kafka", addr).Fn(context.Background()); err == nil {
 		t.Fatal("closed port reported reachable")
 	}
