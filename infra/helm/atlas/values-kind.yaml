@@ -1,0 +1,8 @@
+# Local kind cluster: images loaded with `kind load`, gateway on host port 8080.
+image:
+  pullPolicy: Never
+
+gateway:
+  service:
+    type: NodePort
+    nodePort: 30080

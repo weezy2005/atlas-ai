@@ -1,0 +1,42 @@
+# EKS with managed data services. Endpoints come from `terraform output`;
+# deploy with e.g.
+#   helm upgrade --install atlas infra/helm/atlas -n atlas -f infra/helm/atlas/values-aws.yaml \
+#     --set image.registry=$(terraform output -raw ecr_registry) --set image.tag=$GIT_SHA \
+#     --set database.host=$(terraform output -raw rds_address) ...
+image:
+  registry: ""          # set from `terraform output ecr_registry`
+  tag: ""               # git SHA; ECR tags are immutable
+  pullPolicy: IfNotPresent
+
+env:
+  ENVIRONMENT: prod
+  LOG_LEVEL: INFO
+
+redis:
+  url: ""               # rediss://:<auth>@<elasticache primary endpoint>:6379/0 (TLS)
+
+kafka:
+  bootstrapServers: ""  # MSK bootstrap_brokers_sasl_iam
+
+database:
+  host: ""              # RDS address
+  sslmode: require
+  # Synced from AWS Secrets Manager by External Secrets Operator.
+  credentialsSecret: atlas-db-credentials
+
+defaults:
+  replicas: 3
+  autoscaling:
+    minReplicas: 3
+
+gateway:
+  ingress:
+    enabled: true
+    className: alb      # AWS Load Balancer Controller
+    host: ""
+    annotations:
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+      alb.ingress.kubernetes.io/ssl-redirect: "443"
+      alb.ingress.kubernetes.io/healthcheck-path: /ready

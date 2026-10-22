@@ -1,0 +1,107 @@
+# Defaults target a local cluster with the atlas-deps chart installed as release
+# "atlas-deps". values-aws.yaml overrides them for EKS with RDS, ElastiCache and MSK.
+
+image:
+  registry: ""          # e.g. 123456789012.dkr.ecr.us-east-1.amazonaws.com
+  prefix: atlas-        # image name = <registry>/<prefix><service>
+  tag: dev
+  pullPolicy: IfNotPresent
+
+env:
+  ENVIRONMENT: local
+  LOG_LEVEL: INFO
+
+redis:
+  url: redis://atlas-deps-redis:6379/0
+
+kafka:
+  bootstrapServers: atlas-deps-kafka:9092
+
+tracing:
+  otlpEndpoint: ""      # e.g. http://otel-collector.observability:4318
+
+database:
+  host: atlas-deps-postgres
+  port: 5432
+  name: atlas
+  sslmode: disable      # "require" against RDS
+  # Secret holding one password per service (keys named by passwordKey below).
+  # Locally created by atlas-deps; on AWS synced from Secrets Manager.
+  credentialsSecret: atlas-db-credentials
+
+# Defaults applied to every service unless overridden in services.<name>.
+defaults:
+  replicas: 2
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { memory: 256Mi }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  terminationGracePeriodSeconds: 30
+
+services:
+  gateway:
+    lang: go
+    port: 8080
+    uses: [redis]
+    public: true
+    resources:
+      requests: { cpu: 50m, memory: 32Mi }
+      limits: { memory: 128Mi }
+    autoscaling: { maxReplicas: 10 }
+  brokerage-sync:
+    lang: go
+    port: 8000
+    uses: [postgres, redis, kafka]
+    dbUser: sync_svc
+    passwordKey: SYNC_DB_PASSWORD
+    resources:
+      requests: { cpu: 50m, memory: 32Mi }
+      limits: { memory: 128Mi }
+  auth:
+    lang: python
+    uses: [postgres, redis, kafka]
+    dbUser: auth_svc
+    passwordKey: AUTH_DB_PASSWORD
+  portfolio:
+    lang: python
+    uses: [postgres, redis, kafka]
+    dbUser: portfolio_svc
+    passwordKey: PORTFOLIO_DB_PASSWORD
+  analytics:
+    lang: python
+    uses: [postgres, redis, kafka]
+    dbUser: analytics_svc
+    passwordKey: ANALYTICS_DB_PASSWORD
+    # CPU-bound pandas work scales out further than the I/O services.
+    autoscaling: { maxReplicas: 10 }
+  risk:
+    lang: python
+    uses: [postgres, redis, kafka]
+    dbUser: risk_svc
+    passwordKey: RISK_DB_PASSWORD
+    autoscaling: { maxReplicas: 10 }
+  ai:
+    lang: python
+    uses: [postgres, redis, kafka]
+    dbUser: ai_svc
+    passwordKey: AI_DB_PASSWORD
+  notifications:
+    lang: python
+    uses: [postgres, redis, kafka]
+    dbUser: notifications_svc
+    passwordKey: NOTIFICATIONS_DB_PASSWORD
+
+# Client traffic enters only through the gateway.
+gateway:
+  service:
+    type: ClusterIP
+    nodePort: null      # set with type NodePort for kind
+  ingress:
+    enabled: false
+    className: alb
+    host: ""
+    annotations: {}

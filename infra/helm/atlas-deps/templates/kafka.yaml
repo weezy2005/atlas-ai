@@ -1,0 +1,93 @@
+{{- if or (not .Values.kafka.createTopicsScript) (not .Values.kafka.topics) }}
+{{- fail "set kafka.createTopicsScript and kafka.topics with --set-file (see values.yaml)" }}
+{{- end }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-kafka
+spec:
+  selector: { app: {{ .Release.Name }}-kafka }
+  ports: [{ name: kafka, port: 9092 }]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}-kafka
+spec:
+  serviceName: {{ .Release.Name }}-kafka
+  replicas: 1
+  selector:
+    matchLabels: { app: {{ .Release.Name }}-kafka }
+  template:
+    metadata:
+      labels: { app: {{ .Release.Name }}-kafka }
+    spec:
+      securityContext: { fsGroup: 1000 }
+      containers:
+        - name: kafka
+          image: {{ .Values.kafka.image }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: KAFKA_NODE_ID, value: "1" }
+            - { name: KAFKA_PROCESS_ROLES, value: "broker,controller" }
+            - { name: KAFKA_CONTROLLER_QUORUM_VOTERS, value: "1@localhost:9093" }
+            - { name: KAFKA_LISTENERS, value: "PLAINTEXT://:9092,CONTROLLER://:9093" }
+            - { name: KAFKA_ADVERTISED_LISTENERS, value: "PLAINTEXT://{{ .Release.Name }}-kafka:9092" }
+            - { name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP, value: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT" }
+            - { name: KAFKA_CONTROLLER_LISTENER_NAMES, value: CONTROLLER }
+            - { name: KAFKA_INTER_BROKER_LISTENER_NAME, value: PLAINTEXT }
+            - { name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR, value: "1" }
+            - { name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR, value: "1" }
+            - { name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR, value: "1" }
+            - { name: KAFKA_AUTO_CREATE_TOPICS_ENABLE, value: "false" }
+            - { name: KAFKA_LOG_DIRS, value: /var/lib/kafka/data/logs }
+            - { name: KAFKA_HEAP_OPTS, value: "-Xms384m -Xmx384m" }
+          ports: [{ containerPort: 9092 }]
+          readinessProbe:
+            tcpSocket: { port: 9092 }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 200m, memory: 512Mi }
+            limits: { memory: 768Mi }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/kafka/data }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources: { requests: { storage: {{ .Values.kafka.storage }} } }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-kafka-topics
+data:
+  create-topics.sh: {{ .Values.kafka.createTopicsScript | quote }}
+  topics.txt: {{ .Values.kafka.topics | quote }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-kafka-init
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  # Retries cover the window where the broker is still starting.
+  backoffLimit: 20
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: create-topics
+          image: {{ .Values.kafka.image }}
+          imagePullPolicy: IfNotPresent
+          command: [/bin/sh, /scripts/create-topics.sh]
+          env:
+            - { name: BOOTSTRAP, value: "{{ .Release.Name }}-kafka:9092" }
+            - { name: PARTITIONS, value: "{{ .Values.kafka.partitions }}" }
+          volumeMounts:
+            - { name: scripts, mountPath: /scripts }
+      volumes:
+        - name: scripts
+          configMap: { name: {{ .Release.Name }}-kafka-topics }

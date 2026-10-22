@@ -1,0 +1,179 @@
+{{- range $name, $raw := .Values.services }}
+{{- $s := include "atlas.svc" (dict "root" $ "svc" $raw) | fromYaml }}
+{{- $ctx := dict "root" $ "name" $name }}
+{{- $db := $.Values.database }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  # EKS Pod Identity associations (Terraform) bind AWS IAM roles to these names.
+  name: atlas-{{ $name }}
+  labels: {{- include "atlas.labels" $ctx | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels: {{- include "atlas.labels" $ctx | nindent 4 }}
+spec:
+  {{- if not $s.autoscaling.enabled }}
+  replicas: {{ $s.replicas }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  selector:
+    matchLabels: {{- include "atlas.selector" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "atlas.labels" $ctx | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ $s.port }}"
+        prometheus.io/path: /metrics
+    spec:
+      serviceAccountName: atlas-{{ $name }}
+      terminationGracePeriodSeconds: {{ $s.terminationGracePeriodSeconds }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {{- include "atlas.selector" $ctx | nindent 14 }}
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {{- include "atlas.selector" $ctx | nindent 14 }}
+      containers:
+        - name: {{ $name }}
+          image: {{ include "atlas.image" $ctx | quote }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $s.port }}
+          env:
+            - name: PORT
+              value: "{{ $s.port }}"
+            {{- range $k, $v := $.Values.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            {{- if $.Values.tracing.otlpEndpoint }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ $.Values.tracing.otlpEndpoint | quote }}
+            {{- end }}
+            {{- if has "redis" $s.uses }}
+            - name: REDIS_URL
+              value: {{ $.Values.redis.url | quote }}
+            {{- end }}
+            {{- if has "kafka" $s.uses }}
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: {{ $.Values.kafka.bootstrapServers | quote }}
+            {{- end }}
+            {{- if has "postgres" $s.uses }}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $db.credentialsSecret }}
+                  key: {{ $s.passwordKey }}
+            # $(DB_PASSWORD) is expanded by the kubelet from the variable above.
+            - name: DATABASE_URL
+              {{- if eq $s.lang "python" }}
+              value: "postgresql+asyncpg://{{ $s.dbUser }}:$(DB_PASSWORD)@{{ $db.host }}:{{ $db.port }}/{{ $db.name }}{{ if ne $db.sslmode "disable" }}?ssl={{ $db.sslmode }}{{ end }}"
+              {{- else }}
+              value: "postgres://{{ $s.dbUser }}:$(DB_PASSWORD)@{{ $db.host }}:{{ $db.port }}/{{ $db.name }}?sslmode={{ $db.sslmode }}"
+              {{- end }}
+            {{- end }}
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 2
+            failureThreshold: 45
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /ready, port: http }
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          lifecycle:
+            # Let endpoints and load balancers drop the pod before it stops accepting.
+            preStop:
+              sleep: { seconds: 5 }
+          resources: {{- toYaml $s.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- include "atlas.labels" $ctx | nindent 4 }}
+spec:
+  {{- if and $s.public (eq $.Values.gateway.service.type "NodePort") }}
+  type: NodePort
+  {{- else }}
+  type: ClusterIP
+  {{- end }}
+  selector: {{- include "atlas.selector" $ctx | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $s.port }}
+      targetPort: http
+      {{- if and $s.public $.Values.gateway.service.nodePort }}
+      nodePort: {{ $.Values.gateway.service.nodePort }}
+      {{- end }}
+{{- if $s.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+  labels: {{- include "atlas.labels" $ctx | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $name }}
+  minReplicas: {{ $s.autoscaling.minReplicas }}
+  maxReplicas: {{ $s.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $s.autoscaling.targetCPUUtilizationPercentage }}
+  behavior:
+    # Scale up fast on bursts, scale down slowly to avoid flapping.
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies: [{ type: Percent, value: 100, periodSeconds: 15 }]
+    scaleDown:
+      stabilizationWindowSeconds: 300
+{{- end }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  labels: {{- include "atlas.labels" $ctx | nindent 4 }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: {{- include "atlas.selector" $ctx | nindent 6 }}
+{{- end }}

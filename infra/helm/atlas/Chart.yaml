@@ -1,0 +1,6 @@
+apiVersion: v2
+name: atlas
+description: ATLAS AI application services (gateway, brokerage-sync, auth, portfolio, analytics, risk, ai, notifications)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
