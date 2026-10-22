@@ -48,3 +48,6 @@ def configure_logging(service: str, level: str = "INFO") -> None:
     for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         logging.getLogger(name).handlers[:] = []
         logging.getLogger(name).propagate = True
+    # Request metrics and traces already cover access; per-request lines from
+    # health probes and Prometheus scrapes would drown real logs.
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)

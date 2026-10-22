@@ -5,10 +5,16 @@ ENV CGO_ENABLED=0 GOWORK=off
 WORKDIR /src
 COPY libs/go-common/go.mod libs/go-common/go.sum libs/go-common/
 COPY services/gateway/go.mod services/gateway/go.sum services/gateway/
-RUN --mount=type=cache,target=/go/pkg/mod cd services/gateway && go mod download
+# extra_ca: see EXTRA_CA_FILE in .env.example.
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=secret,id=extra_ca,required=false \
+    cat /etc/ssl/certs/ca-certificates.crt /run/secrets/extra_ca > /tmp/ca.pem 2>/dev/null \
+      || cp /etc/ssl/certs/ca-certificates.crt /tmp/ca.pem; \
+    cd services/gateway && SSL_CERT_FILE=/tmp/ca.pem go mod download
 COPY libs/go-common libs/go-common
 COPY services/gateway services/gateway
-RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build     cd services/gateway && go build -trimpath -ldflags="-s -w" -o /out/app ./cmd/gateway
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    cd services/gateway && go build -trimpath -ldflags="-s -w" -o /out/app ./cmd/gateway
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/app /app

@@ -123,7 +123,7 @@ services:
 
   # ---------- services ----------
   gateway:
-    build: { context: .., dockerfile: services/gateway/Dockerfile }
+    build: { context: .., dockerfile: services/gateway/Dockerfile, secrets: [extra_ca] }
     restart: unless-stopped
     environment:
       PORT: "8080"
@@ -138,7 +138,7 @@ services:
         limits: { memory: 128m }
 
   brokerage-sync:
-    build: { context: .., dockerfile: services/brokerage-sync/Dockerfile }
+    build: { context: .., dockerfile: services/brokerage-sync/Dockerfile, secrets: [extra_ca] }
     restart: unless-stopped
     environment:
       PORT: "8000"
@@ -154,45 +154,49 @@ services:
 
   auth:
     <<: *python-service
-    build: { context: .., dockerfile: services/auth/Dockerfile }
+    build: { context: .., dockerfile: services/auth/Dockerfile, secrets: [extra_ca] }
     environment:
       <<: *python-env
       DATABASE_URL: postgresql+asyncpg://auth_svc:${AUTH_DB_PASSWORD}@postgres:5432/atlas
 
   portfolio:
     <<: *python-service
-    build: { context: .., dockerfile: services/portfolio/Dockerfile }
+    build: { context: .., dockerfile: services/portfolio/Dockerfile, secrets: [extra_ca] }
     environment:
       <<: *python-env
       DATABASE_URL: postgresql+asyncpg://portfolio_svc:${PORTFOLIO_DB_PASSWORD}@postgres:5432/atlas
 
   analytics:
     <<: *python-service
-    build: { context: .., dockerfile: services/analytics/Dockerfile }
+    build: { context: .., dockerfile: services/analytics/Dockerfile, secrets: [extra_ca] }
     environment:
       <<: *python-env
       DATABASE_URL: postgresql+asyncpg://analytics_svc:${ANALYTICS_DB_PASSWORD}@postgres:5432/atlas
 
   risk:
     <<: *python-service
-    build: { context: .., dockerfile: services/risk/Dockerfile }
+    build: { context: .., dockerfile: services/risk/Dockerfile, secrets: [extra_ca] }
     environment:
       <<: *python-env
       DATABASE_URL: postgresql+asyncpg://risk_svc:${RISK_DB_PASSWORD}@postgres:5432/atlas
 
   ai:
     <<: *python-service
-    build: { context: .., dockerfile: services/ai/Dockerfile }
+    build: { context: .., dockerfile: services/ai/Dockerfile, secrets: [extra_ca] }
     environment:
       <<: *python-env
       DATABASE_URL: postgresql+asyncpg://ai_svc:${AI_DB_PASSWORD}@postgres:5432/atlas
 
   notifications:
     <<: *python-service
-    build: { context: .., dockerfile: services/notifications/Dockerfile }
+    build: { context: .., dockerfile: services/notifications/Dockerfile, secrets: [extra_ca] }
     environment:
       <<: *python-env
       DATABASE_URL: postgresql+asyncpg://notifications_svc:${NOTIFICATIONS_DB_PASSWORD}@postgres:5432/atlas
+
+secrets:
+  extra_ca:
+    file: ${EXTRA_CA_FILE:-./certs/none.pem}
 
 volumes:
   pgdata:
